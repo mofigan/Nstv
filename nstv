@@ -26,7 +26,7 @@ __END__
 
 =head1 NAME
 
-nstv - Output the TV programs TSV from tv.infoseek.co.jp
+Nstv - Dump the TSV from tv.infoseek.co.jp
 
 =head1 SYNOPSYS
 
@@ -34,7 +34,7 @@ nstv - Output the TV programs TSV from tv.infoseek.co.jp
 
 =head1 DESCRIPTION
 
-nstv is a tool outputting a TV program with a TSV format.
+Nstv is a tool outputting a TV program with a TSV format.
 
 =head2 Require
 

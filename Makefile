@@ -6,5 +6,8 @@ all:
 install:
 	cp nstv nstv.yaml Nstv.pm $(BINDIR)
 
+push:
+	git push git@github.com:mofigan/Nstv.git master
+
 clean:
 	rm -f nstv_20*.tsv nstv_cache.html

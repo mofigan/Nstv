@@ -43,7 +43,7 @@ sub setup_filenames {
     my $self = shift;
     my ($dir) = @_;
 
-    # Get 'Today'
+    # Get Today
     my $t = Time::Piece::localtime();
     my $ymdu = sprintf '%04d_%02d_%02d', $t->year, $t->mon, $t->mday;
     my $ymd = $ymdu;

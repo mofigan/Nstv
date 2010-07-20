@@ -1,5 +1,5 @@
 package Nstv;
-our $VERSION = '0.2.1';
+our $VERSION = '0.2.2';
 
 use 5.10.0;
 use strict;

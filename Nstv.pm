@@ -145,7 +145,7 @@ sub html_to_tsv {
 
     # Error
     if ($rv eq '') {
-        my $err = "Parse error when make a tsv from html file. abort.";
+        my $err = "Parse error. Abort. See also $self->{cache}";
         $self->log($err);
         croak $err;
     }

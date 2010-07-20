@@ -8,6 +8,7 @@ use Carp;
 use YAML::Syck qw/LoadFile/;
 use Encode qw/encode decode decode_utf8/;
 use Time::Piece ();
+use Time::Seconds;
 
 sub new {
     my $class = shift;
@@ -25,10 +26,13 @@ sub boot {
     my $self = shift;
     my ($config, $tsvdir) = @_;
     $self->load_config($config);
-    $self->setup_filenames($tsvdir);
-    $self->is_exist_tsv;
-    $self->get_html;
-    $self->output_tsv;
+    my $t = Time::Piece::localtime();
+    for (my $i=0; $i<$self->{conf}->{loop_days}; $i++) {
+        $t = $t + ONE_DAY;
+        $self->setup_filenames($tsvdir, $t->ymd);
+        $self->get_html('nocache');
+        $self->output_tsv;
+    }
 }
 
 sub load_config {
@@ -41,20 +45,18 @@ sub load_config {
 
 sub setup_filenames {
     my $self = shift;
-    my ($dir) = @_;
-
-    # Get Today
-    my $t = Time::Piece::localtime();
-    my $ymdu = sprintf '%04d_%02d_%02d', $t->year, $t->mon, $t->mday;
-    my $ymd = $ymdu;
-    $ymd =~ s/_//g;
+    my ($dir, $ymd) = @_;
+    my $ymdu = $ymd;
+    my $ymdn = $ymd;
+    $ymdu =~ s/\-/_/g;
+    $ymdn =~ s/\-//g;
 
     # TSV spool dir.
     mkdir $dir if not -d $dir;
 
     # URI and Filenames.
     $self->{uri} = $self->{conf}->{uri};
-    $self->{uri} =~ s/YYYYMMDD/$ymd/;
+    $self->{uri} =~ s/YYYYMMDD/$ymdn/;
     $self->{tsv} = "$dir/nstv_$ymdu.tsv";
     $self->{cache} = "$dir/nstv_cache.html";
 }
@@ -73,7 +75,8 @@ sub is_exist_tsv {
 
 sub get_html {
     my $self = shift;
-    if (-f $self->{cache} and
+    my ($opt_nocache) = @_;
+    if (-f $self->{cache} and not defined $opt_nocache and
         time - _timestamp($self->{cache}) < $self->{conf}->{expire_cache}) {
         $self->log("Using cache html: $self->{cache}");
         return;
@@ -106,6 +109,7 @@ sub output_tsv {
         $self->log("Output: $tsv");
         rename $tmptsv, $tsv;
     }
+    unlink $self->{cache};
 }
 
 # HTML encoding is euc-jp.

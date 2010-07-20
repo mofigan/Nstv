@@ -1,0 +1,69 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use FindBin;
+use File::Spec;
+use Getopt::Long;
+use lib "$FindBin::Bin";
+use Nstv;
+
+my $config = File::Spec->catfile($FindBin::Bin, 'nstv.yaml');
+my $tsvdir = $FindBin::Bin;
+GetOptions('config=s', \$config,
+	   'tsvdir=s', \$tsvdir,
+           'version' => \my $version);
+if ($version) {
+    print "version $Nstv::VERSION\n";
+    exit;
+}
+my $ns = Nstv->new;
+$ns->boot($config, $tsvdir);
+
+__END__
+
+=encoding utf-8
+
+=head1 NAME
+
+nstv - Output the TV programs TSV from tv.infoseek.co.jp
+
+=head1 SYNOPSYS
+
+  $ nstv
+
+=head1 DESCRIPTION
+
+nstv is a tool outputting a TV program with a TSV format.
+
+=head2 Require
+
+    Perl 5.1001 or higher and several CPAN modules
+
+=head2 Install
+
+    $ cp nstv.yaml.sample nstv.yaml
+    $ (Edit nstv.yaml. Set "area" to your area. Ex. Tokyo is 'area=008')
+    $ nstv > nstv.log 2>&1
+
+=head2 Commandline option
+
+--config file   Load config file.
+--tsvdir dir    Set output dir.
+--version       Print version.
+
+=head1 AUTHOR
+
+mofigan <mofigan@gmail.com>
+
+=head1 SEE ALSO
+
+L<http://figureclip.posterous.com/>
+
+=head1 LICENCE
+
+Except where otherwise noted, nstv is free software; you
+can redistribute it and/or modify it under the same terms as
+Perl itself.
+
+=cut

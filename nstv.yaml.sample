@@ -1,0 +1,61 @@
+uri:
+  http://tv.infoseek.co.jp/pc/VHF/tv_vhf.html?sdate=YYYYMMDD&shour=5&lhour=24&area=008
+
+expire_cache: 3600
+log_encoding: euc-jp
+tsv_encoding: euc-jp
+
+stations:
+  0031: NHK
+  0041: NHK教育
+  0004: 日本テレビ
+  0005: TBS
+  0006: フジテレビ
+  0007: テレビ朝日
+  0008: テレビ東京
+  0009: tvk
+  0010: チバテレビ
+  0012: テレ玉
+  0016: TOKYO MX
+  0003: NHK衛星第一
+  0014: NHK衛星第二
+  0017: WOWOW
+  0023: NHKハイビジョン
+  0024: BS日テレ
+  0025: BS朝日
+  0026: BS-i
+  0027: BSジャパン
+  0028: BSフジ
+  0021: NHK BS1
+  0022: NHK BS2
+  0033: WOWOW
+  0034: WOWOW2
+  0035: WOWOW3
+  0030: スター・チャンネルBS
+  0019: BSイレブン
+  0020: トゥエルビ
+  0909: J sports ESPN
+  0929: J sports 1
+  0999: J sports 2
+  0969: J sports Plus
+  0954: グリーンチャンネル
+  0918: ゴルフチャンネル
+  0944: FIGHTINGTVサムライ
+  0940: 日テレG+
+  0997: TBSニュースバード
+  0971: フジテレビ739
+  0903: スカイ・A sports+
+  0911: GAORA
+  0051: NHK第1
+  0052: NHK第2
+  0054: TBSラジオ
+  0055: 文化放送
+  0056: ニッポン放送
+  0060: ラジオ日本
+  0100: NHK FM
+  0076: BayFM
+  0058: TOKYO FM
+  0073: J-WAVE
+  0068: FMヨコハマ
+  0075: NACK5
+  0057: ラジオNIKKEI

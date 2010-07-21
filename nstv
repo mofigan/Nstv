@@ -1,12 +1,178 @@
 #!/usr/bin/env perl
 
+############################################################
+package Nstv;
+our $VERSION = '0.2.3';
+
+use 5.10.0;
+use strict;
+use warnings;
+use Carp;
+use YAML::Syck qw/LoadFile/;
+use Encode qw/encode decode decode_utf8/;
+use Time::Piece ();
+use Time::Seconds;
+use URI;
+use Web::Scraper;
+use HTML::Entities qw/decode_entities/;
+use FindBin;
+use File::Spec;
+
+sub new {
+    my $class = shift;
+    my $self = bless {
+        conf => {},
+        domain => '',
+        @_ ,
+    }, $class;
+    return $self;
+}
+
+sub boot {
+    my $self = shift;
+    my ($config, $tsvdir) = @_;
+    $self->load_config($config);
+    mkdir $tsvdir or croak $! if not -d $tsvdir;
+    my $t = Time::Piece::localtime();
+    for (my $i=0; $i<$self->{conf}->{fetch_days}; $i++) {
+	my $res = $self->scrape($t->ymd);
+	my @lines = $self->parse($res);
+	$self->dump_tsv($tsvdir, $t->ymd, @lines);
+        $t = $t + ONE_DAY;
+    }
+}
+
+sub load_config {
+    my $self = shift;
+    my ($config) = @_;
+    $self->log("config: $config");
+    eval { $self->{conf} = LoadFile($config); };
+    croak "$config: $!" if ($@);
+}
+
+sub scrape {
+    my $self = shift;
+    my ($ymd) = @_;
+    my $ymdn = $ymd;
+    $ymdn =~ s/\-//g;  # YYYYMMDD. No separated.
+    my $scraper = scraper { process 'td[valign]', 'td[]' => 'HTML'; };
+    my $url = $self->{conf}->{uri};
+    $url =~ s/YYYYMMDD/$ymdn/g;
+    my $uri = new URI($url);
+    $self->{domain} = 'http://' . $uri->host;
+    return $scraper->scrape($uri);
+}
+
+sub parse {
+    my $self = shift;
+    my ($res) = @_;
+    my @lines;
+
+    foreach (@{$res->{td}}) {
+	Encode::_utf8_off $_;
+	if (m|^(\d+:\d\d).*?href="(.+?)">(.+?)</a>(.+)<a href="(/tvpi.*?)"|) {
+	    my ($hm, $link, $name, $desc, $iepg) = ($1, $2, $3, $4, $5, $6);
+	    $hm = "0$hm" if (length($hm) == 4);
+	    _remove_tag(\$name);
+	    _remove_tag(\$desc);
+	    $link = $self->{domain} . decode_entities($link);
+	    $iepg = $self->{domain} . decode_entities($iepg);
+	    my $stname = '-';
+            $stname = $self->get_station_name($link);
+	    push @lines, join "\t", ($hm, $stname, $name, $desc, $link, $iepg);
+	}
+    }
+
+    # Error check
+    my $nlines = @lines;
+    if ($nlines == 0) {
+        my $err = "Parse failed. Abort.";
+        $self->log($err);
+        croak $err;
+    }
+
+    return @lines;
+}
+
+sub dump_tsv {
+    my $self = shift;
+    my ($tsvdir, $ymd, @lines) = @_;
+    my $ymdu = $ymd;
+    $ymdu =~ s/\-/_/g; # YYYY_MM_DD. Underbar separated.
+
+    # Filenames
+    my $tsvfile = 'nstv_' . $ymdu . '.tsv';
+    my $tmpfile = "$tsvfile.$$";
+    my $tsv = File::Spec->catfile($tsvdir, $tsvfile);
+    my $tmptsv = File::Spec->catfile($tsvdir, $tmpfile);
+
+    # Output tmpfile
+    open my $out, '>', $tmptsv or croak $!;
+    foreach (@lines) {
+	print $out encode($self->{conf}->{tsv_encoding},
+			  decode('utf8', $_)) . "\n";
+    }
+    close $out;
+
+    if (-f $tsv) {
+        if (-s $tmptsv > -s $tsv) {
+            $self->log("Overwrite: $tsvfile");
+            unlink $tsv;
+            rename $tmptsv, $tsv;
+        }
+        else {
+            $self->log("Thru: $tsvfile");
+            unlink $tmptsv;
+        }
+    }
+    else {
+        $self->log("Output: $tsvfile");
+        rename $tmptsv, $tsv;
+    }
+}
+
+sub get_station_name {
+    my $self = shift;
+    my ($link) = @_;
+    my $name;
+    if ($link =~ /program=p(\d\d\d\d)/) {
+        my $sid = $1;
+        $name = $self->{conf}->{stations}{$sid};
+        $name = $sid if not $name;
+    }
+    return $name;
+}
+
+sub log {
+    my($self, $msg) = @_;
+    my $ymd= localtime;
+    chomp($msg);
+    if ($self->{conf}->{log_encoding}) {
+        $msg = Encode::decode_utf8($msg) unless utf8::is_utf8($msg);
+        $msg = Encode::encode($self->{conf}->{log_encoding}, $msg);
+    }
+    warn "$ymd [$$] $msg\n";
+}
+
+sub _remove_tag {
+    my($html_ref) = @_;
+    $$html_ref =~ s|<img src=.+? alt="(.+?)".*?>|\[$1\]|g;
+    $$html_ref =~ s|\[[^\]]+?iEPG[^\]]+?\]||g;
+    $$html_ref =~ s|\s+| |g;
+    $$html_ref =~ s|<.*?>||g;
+    $$html_ref = '-' if (not $$html_ref);
+}
+
+1;
+
+############################################################
+package main;
+
 use strict;
 use warnings;
 use FindBin;
 use File::Spec;
 use Getopt::Long;
-use lib "$FindBin::Bin";
-use Nstv;
 
 my $config = File::Spec->catfile($FindBin::Bin, 'nstv.yaml');
 my $tsvdir = $FindBin::Bin;
@@ -38,7 +204,7 @@ Nstv is a tool outputting a TV program with a TSV format.
 
 =head2 Require
 
-    Perl 5.1001 or higher and several CPAN modules
+    Perl 5.10.0 or higher and several CPAN modules
 
 =head2 Install
 

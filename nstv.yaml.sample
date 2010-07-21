@@ -1,7 +1,7 @@
 uri:
   http://tv.infoseek.co.jp/pc/VHF/tv_vhf.html?sdate=YYYYMMDD&shour=5&lhour=24&area=008
 
-expire_cache: 3600
+fetch_days: 1
 log_encoding: euc-jp
 tsv_encoding: euc-jp
 

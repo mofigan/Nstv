@@ -4,7 +4,7 @@ all:
 	cat nstv.yaml | sed 's/area=.../area=008/' > nstv.yaml.sample
 
 install:
-	cp nstv nstv.yaml Nstv.pm $(BINDIR)
+	cp nstv nstv.yaml $(BINDIR)
 
 push:
 	git push git@github.com:mofigan/Nstv.git master

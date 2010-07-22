@@ -2,7 +2,7 @@
 
 ############################################################
 package Nstv;
-our $VERSION = '0.2.3';
+our $VERSION = '0.2.4';
 
 use 5.10.0;
 use strict;
@@ -158,8 +158,10 @@ sub _remove_tag {
     my($html_ref) = @_;
     $$html_ref =~ s|<img src=.+? alt="(.+?)".*?>|\[$1\]|g;
     $$html_ref =~ s|\[[^\]]+?iEPG[^\]]+?\]||g;
-    $$html_ref =~ s|\s+| |g;
     $$html_ref =~ s|<.*?>||g;
+    $$html_ref =~ s|^\s+||g;
+    $$html_ref =~ s|\s+$||g;
+    $$html_ref =~ s|\s+| |g;
     $$html_ref = '-' if (not $$html_ref);
 }
 

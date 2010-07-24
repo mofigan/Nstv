@@ -77,7 +77,7 @@ sub rename {
 
 	# Load TSV.
 	my $tsvdata = _get_content($tsv);  # euc-jp or sjis
-	$tsvdata = guess($tsvdata);
+	$tsvdata = _guess($tsvdata);
 	Encode::_utf8_off($tsvdata);
 
 	# Search prefix in TSV.
@@ -127,8 +127,8 @@ sub rename {
 
     # Confirm.
     if ($self->{conf}->{enable_confirm_prompt}) {
-	prompt("Enter to rename? [Y/n]", '^[Yy\n\r]');
-	prompt("Last chance. Ok? [Y/n]", '^[Yy\n\r]');
+	_prompt("Enter to rename? [Y/n]", '^[Yy\n\r]');
+	_prompt("Last chance. Ok? [Y/n]", '^[Yy\n\r]');
     }
 
     # Rename.
@@ -147,9 +147,20 @@ sub filename_ztoh {
     my ($filename) = @_;
     my $filename_encoding = $self->{conf}->{filename_encoding};
     my $rv = encode('utf8', decode($filename_encoding, $filename));
-    $rv = ztoh($rv, 1) if ($self->{conf}->{enable_zenkaku_to_hankaku});
+    $rv = _ztoh($rv, 1) if ($self->{conf}->{enable_zenkaku_to_hankaku});
     $rv = encode($filename_encoding, decode('utf8', $rv));
     return $rv;
+}
+
+sub log {
+    my($self, $msg) = @_;
+    my $ymd= localtime;
+    chomp($msg);
+    if ($self->{conf}->{log_encoding}) {
+        $msg = Encode::decode_utf8($msg) unless utf8::is_utf8($msg);
+        $msg = Encode::encode($self->{conf}->{log_encoding}, $msg);
+    }
+    warn "$ymd [$$] $msg\n";
 }
 
 # in:  program_2010_12_31_23_55_00.mpg
@@ -176,7 +187,7 @@ sub _yesterday {
     return $yesterday;
 }
 
-sub prompt {
+sub _prompt {
     my ($msg, $yes_regexp) = @_;
     print "$msg";
     my $key = <STDIN>;
@@ -193,18 +204,7 @@ sub _get_content {
     return $content;
 }
 
-sub log {
-    my($self, $msg) = @_;
-    my $ymd= localtime;
-    chomp($msg);
-    if ($self->{conf}->{log_encoding}) {
-        $msg = Encode::decode_utf8($msg) unless utf8::is_utf8($msg);
-        $msg = Encode::encode($self->{conf}->{log_encoding}, $msg);
-    }
-    warn "$ymd [$$] $msg\n";
-}
-
-sub guess {
+sub _guess {
     my ($str) = @_;
     Encode::Guess::guess_encoding($_[0]);
     my $decoder = Encode::Guess->guess($str);
@@ -212,7 +212,7 @@ sub guess {
     return $decoder->decode($str);
 }
 
-sub ztoh {
+sub _ztoh {
     my ($str, $opt_ntfs) = @_;
     my $flag = utf8::is_utf8($str);
     Encode::_utf8_on($str);

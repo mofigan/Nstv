@@ -71,7 +71,6 @@ sub rename {
 	my $tsv = _get_tsv_filename($tsvdir, $file, $hh);
 	if (not -f $tsv) {
 	    my $pre = $self->filename_ztoh($prefix);
-#encode($filename_encoding, decode('utf8', ztoh(encode('utf8', decode($filename_encoding, $prefix)), 1)));
 	    push @renames, join "\t", ($file, "$prefix #$ymd.$ext", "NoTSV");
 	    next;
 	}
@@ -177,18 +176,6 @@ sub _yesterday {
     return $yesterday;
 }
 
-# No use...
-sub _get_regexp {
-    my ($format) = @_; 			# Input Ex. %P_%Y_%m_%d_%H_%M_%S%D
-    my $reg = $format;
-    $reg =~ s/\%Y/\(\\d{4}\)/;		# year
-    $reg =~ s/\%[mdHMS]/\(\\d{2}\)/g;   # mon, mday, hour, min
-    $reg =~ s/\%P/\(.+\)/;		# Program name
-    $reg =~ s/\%D/\(.+\)/;		# Description
-    $reg = "^$reg\\.";			# Add period
-    return $reg;
-}
-
 sub prompt {
     my ($msg, $yes_regexp) = @_;
     print "$msg";
@@ -223,32 +210,6 @@ sub guess {
     my $decoder = Encode::Guess->guess($str);
     ref($decoder) or croak "Can't guess: $decoder";
     return $decoder->decode($str);
-}
-
-sub stou {
-    encode('utf-8', decode('cp932', $_[0]));
-}
-
-sub utos {
-    Encode::_utf8_off($_[0]);
-    encode('cp932', decode('utf-8', $_[0]), Encode::FB_HTMLCREF);
-}
-
-sub etou {
-    encode('utf-8', decode('euc-jp', $_[0]));
-}
-
-sub utoe {
-    Encode::_utf8_off($_[0]);
-    encode('euc-jp', decode('utf-8', $_[0]), Encode::FB_HTMLCREF);
-}
-
-sub etos {
-    encode('cp932', decode('euc-jp', $_[0]));
-}
-
-sub stoe {
-    encode('euc-jp', decode('cp932', $_[0]));
 }
 
 sub ztoh {

@@ -58,8 +58,9 @@ sub rename {
     my @files = sort grep( !/^\./, readdir($fd));
     closedir $fd;
 
-    # Movie files loop.
     my @renames;
+
+    # Movie files loop.
     foreach my $file (@files) {
 	next if ($file !~ /$self->{conf}->{regexp_file}/);
 	my ($prefix, $year, $mon, $mday, $hh, $mm, $ss, $desc, $ext) =
@@ -69,7 +70,8 @@ sub rename {
 	my $ymd = sprintf('%04d%02d%02d', $year, $mon, $mday),
 	my $tsv = _get_tsv_filename($tsvdir, $file, $hh);
 	if (not -f $tsv) {
-	    my $pre = encode($filename_encoding, decode('utf8', ztoh(encode('utf8', decode($filename_encoding, $prefix)), 1)));
+	    my $pre = $self->filename_ztoh($prefix);
+#encode($filename_encoding, decode('utf8', ztoh(encode('utf8', decode($filename_encoding, $prefix)), 1)));
 	    push @renames, join "\t", ($file, "$prefix #$ymd.$ext", "NoTSV");
 	    next;
 	}
@@ -90,8 +92,10 @@ sub rename {
 		    $name =~ s/$reg//g;
 		    $desc =~ s/$reg//g;
 		}
-		$name = ztoh($name, 1);
-		$desc = ztoh($desc, 1);
+		if ($self->{conf}->{enable_zenkaku_to_hankaku}) {
+		    $name = ztoh($name, 1);
+		    $desc = ztoh($desc, 1);
+		}
 		$to = "$name #$ymd $desc.$ext";
 		$to =~ s/\s*(\..{3})$/$1/; # delete space before desc.
 		$to = encode($filename_encoding, decode('utf8', $to));
@@ -101,7 +105,7 @@ sub rename {
 	    }
 	}
 	if (not $to) {
-	    my $pre = encode($filename_encoding, decode('utf8', ztoh(encode('utf8', decode($filename_encoding, $prefix)), 1)));
+	    my $pre = $self->filename_ztoh($prefix);
 	    push @renames, join "\t", ($file, "$pre #$ymd.$ext", "NoHit,$tsv");
 	}
     }
@@ -114,7 +118,7 @@ sub rename {
 	return;
     }
 
-    # List up.
+    # List up new filename.
     foreach my $fromto (@renames) {
 	my ($from , $to, $reason) = split "\t", $fromto;
 	my $msg = $to;
@@ -122,7 +126,7 @@ sub rename {
 	print "$msg\n";
     }
 
-    # User prompt.
+    # Confirm.
     if ($self->{conf}->{enable_confirm_prompt}) {
 	prompt("Enter to rename? [Y/n]", '^[Yy\n\r]');
 	prompt("Last chance. Ok? [Y/n]", '^[Yy\n\r]');
@@ -137,6 +141,16 @@ sub rename {
 	}
     }
     chdir cwd;
+}
+
+sub filename_ztoh {
+    my $self = shift;
+    my ($filename) = @_;
+    my $filename_encoding = $self->{conf}->{filename_encoding};
+    my $rv = encode('utf8', decode($filename_encoding, $filename));
+    $rv = ztoh($rv, 1) if ($self->{conf}->{enable_zenkaku_to_hankaku});
+    $rv = encode($filename_encoding, decode('utf8', $rv));
+    return $rv;
 }
 
 # in:  program_2010_12_31_23_55_00.mpg
@@ -163,6 +177,7 @@ sub _yesterday {
     return $yesterday;
 }
 
+# No use...
 sub _get_regexp {
     my ($format) = @_; 			# Input Ex. %P_%Y_%m_%d_%H_%M_%S%D
     my $reg = $format;

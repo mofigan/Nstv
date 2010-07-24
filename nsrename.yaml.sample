@@ -10,6 +10,7 @@ regexp_file:
 log_encoding: cp932
 filename_encoding: cp932
 enable_confirm_prompt: 1
+enable_zenkaku_to_hankaku: 1
 
 regexp_delete_descs:
   - (\[出演\]|\[声\]|\[解説\]).*$

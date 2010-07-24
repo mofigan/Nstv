@@ -1,0 +1,15 @@
+nstv_tsvdir:
+  c:/nstv
+
+target_dirs:
+  - c:/movie_spool_dir
+
+regexp_file:
+  ^(.+)_(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})(.*)\.(mpg|avi|mp4|flv|mkv|3gp|wav|mpeg)$
+
+log_encoding: cp932
+filename_encoding: cp932
+enable_confirm_prompt: 1
+
+regexp_delete_descs:
+  - (\[出演\]|\[声\]|\[解説\]).*$

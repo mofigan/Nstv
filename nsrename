@@ -1,0 +1,318 @@
+#!/usr/bin/env perl
+our $VERSION = '0.1.2';
+
+############################################################
+package NsRename;
+use strict;
+use warnings;
+use Carp;
+use YAML::Syck qw/LoadFile/;
+use Encode qw/encode decode/;
+use Encode::Guess qw/shift-jis euc-jp 7bit-jis/;
+use Cwd;
+use Time::Piece ();
+use Time::Seconds;
+use File::Spec;
+
+sub new {
+    my $class = shift;
+    my $self = bless {
+        conf => {},
+        @_ ,
+    }, $class;
+    $self->{conf}->{enable_confirm_prompt} = 1;
+    return $self;
+}
+
+sub boot {
+    my $self = shift;
+    my ($config) = @_;
+    $self->load_config($config);
+    foreach my $dir (@{$self->{conf}->{target_dirs}}) {
+	$self->rename($dir);
+    }
+    return;
+}
+
+sub load_config {
+    my $self = shift;
+    my ($config) = @_;
+    $self->log("config: $config");
+    eval { $self->{conf} = LoadFile($config); };
+    croak "$config: $!" if ($@);
+}
+
+sub rename {
+    my $self = shift;
+    my ($dir) = @_;
+    my $tsvdir = $self->{conf}->{nstv_tsvdir};
+    my $filename_encoding = $self->{conf}->{filename_encoding};
+    $self->log("=== $dir");
+    if (! chdir $dir) {
+	carp "Skip: $dir: $!";
+	return;
+    }
+
+    # Load directory.
+    opendir(my $fd, $dir) or croak $!;
+    my @files = sort grep( !/^\./, readdir($fd));
+    closedir $fd;
+
+    # Movie files loop.
+    my @renames;
+    foreach my $file (@files) {
+	next if ($file !~ /$self->{conf}->{regexp_file}/);
+	my ($prefix, $year, $mon, $mday, $hh, $mm, $ss, $desc, $ext) =
+	    ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+
+	# TSV's filename
+	my $ymd = sprintf('%04d%02d%02d', $year, $mon, $mday),
+	my $tsv = _get_tsv_filename($tsvdir, $file, $hh);
+	if (not -f $tsv) {
+	    my $pre = encode($filename_encoding, decode('utf8', ztoh(encode('utf8', decode($filename_encoding, $prefix)), 1)));
+	    push @renames, join "\t", ($file, "$prefix #$ymd.$ext", "NoTSV");
+	    next;
+	}
+
+	# Load TSV.
+	my $tsvdata = _get_content($tsv);  # euc-jp or sjis
+	$tsvdata = guess($tsvdata);
+	Encode::_utf8_off($tsvdata);
+
+	# Search prefix in TSV.
+	my $to;
+	my $prefix_utf = encode('utf8', decode($filename_encoding, $prefix));
+	foreach my $line (split /\n/, $tsvdata) {
+	    my ($hm, $sta, $name, $desc, $link, $iepg) = split /\t/, $line;
+	    if ($name =~ /$prefix_utf/) {
+		$desc =~ s/^\s*//g;
+		foreach my $reg (@{$self->{conf}->{regexp_delete_descs}}) {
+		    $name =~ s/$reg//g;
+		    $desc =~ s/$reg//g;
+		}
+		$name = ztoh($name, 1);
+		$desc = ztoh($desc, 1);
+		$to = "$name #$ymd $desc.$ext";
+		$to =~ s/\s*(\..{3})$/$1/; # delete space before desc.
+		$to = encode($filename_encoding, decode('utf8', $to));
+		$to =~ s/\?/-/g;
+		push @renames, join "\t", ($file, $to);
+		last;
+	    }
+	}
+	if (not $to) {
+	    my $pre = encode($filename_encoding, decode('utf8', ztoh(encode('utf8', decode($filename_encoding, $prefix)), 1)));
+	    push @renames, join "\t", ($file, "$pre #$ymd.$ext", "NoHit,$tsv");
+	}
+    }
+
+    # No file.
+    my $nrenames = @renames;
+    if ($nrenames == 0) {
+	print "No files to rename.";
+	chdir cwd;
+	return;
+    }
+
+    # List up.
+    foreach my $fromto (@renames) {
+	my ($from , $to, $reason) = split "\t", $fromto;
+	my $msg = $to;
+	$msg .= " ($reason)" if ($reason);
+	print "$msg\n";
+    }
+
+    # User prompt.
+    if ($self->{conf}->{enable_confirm_prompt}) {
+	prompt("Enter to rename? [Y/n]", '^[Yy\n\r]');
+	prompt("Last chance. Ok? [Y/n]", '^[Yy\n\r]');
+    }
+
+    # Rename.
+    foreach my $fromto (@renames) {
+	my ($from , $to) = split "\t", $fromto;
+	if (! rename $from, $to) {
+	    $self->log("Rename failed. Abort. from=$from to=$to");
+	    last;
+	}
+    }
+    chdir cwd;
+}
+
+# in:  program_2010_12_31_23_55_00.mpg
+# out: nstv_2010_12_31.tsv
+sub _get_tsv_filename {
+    my ($dir, $file, $hh) = @_;
+    my $ymd = $1 if ($file =~ /\D(\d{4}_\d{2}_\d{2})\D/);
+    my $tsv = File::Spec->catfile($dir, "nstv_$ymd.tsv");
+    $tsv = _yesterday($tsv) if ($hh < 5);
+    return $tsv;
+}
+
+# in:  nstv_2010_12_31.tsv
+# out: nstv_2010_12_30.tsv
+sub _yesterday {
+    my ($file) = @_;
+    my $ymd;
+    $ymd = $1 if ($file =~ /\D(\d{4}_\d{2}_\d{2})\D/);
+    my $t = Time::Piece->strptime($ymd, '%Y_%m_%d');
+    $t = $t - ONE_DAY;
+    my $ymdy = sprintf '%04d_%02d_%02d', $t->year, $t->mon, $t->mday;
+    my $yesterday = $file;
+    $yesterday =~ s/$ymd/$ymdy/;
+    return $yesterday;
+}
+
+sub _get_regexp {
+    my ($format) = @_; 			# Input Ex. %P_%Y_%m_%d_%H_%M_%S%D
+    my $reg = $format;
+    $reg =~ s/\%Y/\(\\d{4}\)/;		# year
+    $reg =~ s/\%[mdHMS]/\(\\d{2}\)/g;   # mon, mday, hour, min
+    $reg =~ s/\%P/\(.+\)/;		# Program name
+    $reg =~ s/\%D/\(.+\)/;		# Description
+    $reg = "^$reg\\.";			# Add period
+    return $reg;
+}
+
+sub prompt {
+    my ($msg, $yes_regexp) = @_;
+    print "$msg";
+    my $key = <STDIN>;
+    return if ($key =~ /$yes_regexp/);
+    print "Cancel.\n";
+    exit 0;
+}
+
+sub _get_content {
+    my ($file) = @_;
+    open my $in, '<', $file or croak "$file: $!";
+    my $content = do { local $/; <$in> };
+    close $in;
+    return $content;
+}
+
+sub log {
+    my($self, $msg) = @_;
+    my $ymd= localtime;
+    chomp($msg);
+    if ($self->{conf}->{log_encoding}) {
+        $msg = Encode::decode_utf8($msg) unless utf8::is_utf8($msg);
+        $msg = Encode::encode($self->{conf}->{log_encoding}, $msg);
+    }
+    warn "$ymd [$$] $msg\n";
+}
+
+sub guess {
+    my ($str) = @_;
+    Encode::Guess::guess_encoding($_[0]);
+    my $decoder = Encode::Guess->guess($str);
+    ref($decoder) or croak "Can't guess: $decoder";
+    return $decoder->decode($str);
+}
+
+sub stou {
+    encode('utf-8', decode('cp932', $_[0]));
+}
+
+sub utos {
+    Encode::_utf8_off($_[0]);
+    encode('cp932', decode('utf-8', $_[0]), Encode::FB_HTMLCREF);
+}
+
+sub etou {
+    encode('utf-8', decode('euc-jp', $_[0]));
+}
+
+sub utoe {
+    Encode::_utf8_off($_[0]);
+    encode('euc-jp', decode('utf-8', $_[0]), Encode::FB_HTMLCREF);
+}
+
+sub etos {
+    encode('cp932', decode('euc-jp', $_[0]));
+}
+
+sub stoe {
+    encode('euc-jp', decode('cp932', $_[0]));
+}
+
+sub ztoh {
+    my ($str, $opt_ntfs) = @_;
+    my $flag = utf8::is_utf8($str);
+    Encode::_utf8_on($str);
+    $str =~ tr/　！”＃＄％＆’（）＊＋，−．／０-９：；＜＝＞？＠Ａ-Ｚ［￥］＾＿｀ａ-ｚ｛｜｝/ -}/;
+    $str =~ tr|\\\/\:\*\"\?\|<>|￥／：＊”？｜＜＞| if $opt_ntfs;
+    if (!$flag) { Encode::_utf8_off($str); }
+    return $str;
+}
+
+############################################################
+package main;
+use strict;
+use warnings;
+use FindBin;
+use File::Spec;
+use Getopt::Long;
+
+my $config = File::Spec->catfile($FindBin::Bin, 'nsrename.yaml');
+my $dir;
+GetOptions('config=s', \$config,
+	   'dir=s', \$dir,
+           'version' => \my $version);
+if ($version) {
+    print "version $VERSION\n";
+    exit;
+}
+if (not -f $config and (not $dir or -d $dir)) {
+    print "usage: $0 [--dir target_dir] [--config $0.yaml] [--version]\n";
+    exit;
+}
+
+my $ns = NsRename->new;
+if ($dir) {
+    # 1 dir.
+    $ns->load_config($config);
+    $ns->rename($dir);
+}
+else {
+    # Muiti dir.
+    $ns->boot($config);
+}
+
+__END__
+
+=encoding utf-8
+
+=head1 NAME
+
+nsrename - Sample rename utility for nstv.
+
+=head1 SYNOPSYS
+
+nsrename [--dir c:/movie_spool_dir] [--config yaml] [--version]
+
+=head1 DESCRIPTION
+
+Nsrename is a sample rename utility using nstv's TSV.
+  (Before) "TVProg_2010_12_31_23_55_00.mpg"
+  (After)  "TVProgName #20101231 SubTitle and Description.mpg"
+
+=head2 Require
+
+Perl 5.10.0 or higher and several CPAN modules
+
+=head1 AUTHOR
+
+mofigan <mofigan@gmail.com>
+
+=head1 SEE ALSO
+
+L<http://figureclip.posterous.com/>
+
+=head1 LICENCE
+
+Except where otherwise noted, nstv is free software; you
+can redistribute it and/or modify it under the same terms as
+Perl itself.
+
+=cut
